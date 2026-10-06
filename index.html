@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ronda de Mates Online</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#efe3c4;--card:#fff8e6;--ink:#2b2a1e;--mute:#7a7560;--green:#3f6b22;--ok:#4f9a2e;--bad:#c0392b;--acc:#8a5a2b;--cel:#74acdf}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#171b13;--card:#232a1d;--ink:#f1ead6;--mute:#a7a58f;--green:#8fc065;--ok:#7bc65b;--bad:#e5675a;--acc:#d6a05f}}
+:root[data-theme="dark"]{--bg:#171b13;--card:#232a1d;--ink:#f1ead6;--mute:#a7a58f;--green:#8fc065;--ok:#7bc65b;--bad:#e5675a;--acc:#d6a05f}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;justify-content:center;border-top:8px solid var(--cel)}
+#app{width:100%;max-width:480px;padding:18px;display:flex;flex-direction:column;gap:14px;text-align:center}
+h1{margin:4px 0 0;font-size:30px}h2{margin:0;font-size:21px}
+p{margin:0;color:var(--mute);line-height:1.4}
+.card{background:var(--card);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 2px 0 rgba(0,0,0,.08)}
+input{font:inherit;padding:12px;border-radius:12px;border:2px solid var(--mute);background:var(--bg);color:var(--ink);text-align:center;width:100%;user-select:text}
+button{font:inherit;font-weight:700;font-size:19px;padding:16px;border:0;border-radius:16px;background:var(--green);color:#fff;touch-action:none}
+button.alt{background:var(--acc)}button:disabled{opacity:.45}
+button:active{transform:scale(.97)}
+.big{font-size:60px}
+.code{font-size:44px;font-weight:800;letter-spacing:8px;color:var(--acc)}
+.score{display:flex;justify-content:space-between;gap:8px;font-weight:700;font-size:15px}
+.score span{flex:1;background:var(--card);padding:8px;border-radius:12px;border-bottom:4px solid var(--cel)}
+.bar{position:relative;height:34px;border-radius:17px;background:linear-gradient(90deg,#74acdf,#f3d250 55%,#c0392b);overflow:hidden}
+.zone{position:absolute;top:0;bottom:0;background:rgba(70,190,50,.6);border-left:3px solid #fff;border-right:3px solid #fff}
+.mk{position:absolute;top:-2px;width:8px;height:38px;background:#fff;border:2px solid #222;border-radius:4px;transform:translateX(-50%)}
+.mw{position:relative;width:140px;margin:6px auto 0}
+.mate{position:relative;height:150px;border:5px solid var(--acc);border-radius:22px 22px 70px 70px;overflow:hidden;background:#3b2a18}
+.water{position:absolute;left:0;right:0;bottom:0;background:#c98f4e;height:0}
+.yerba{position:absolute;left:-10px;right:-10px;top:-18px;height:60px;border-radius:50%;background:radial-gradient(circle at 40% 40%,#6f9a2c,#3f5f18)}
+.line{position:absolute;left:0;right:0;border-top:3px dashed #fff}
+.bomb{position:absolute;right:18px;top:-34px;width:6px;height:150px;background:linear-gradient(90deg,#ddd,#888);border-radius:3px;transform:rotate(14deg);transform-origin:top}
+.steam{position:absolute;left:0;right:0;top:-40px;height:40px}
+.steam i{position:absolute;bottom:0;width:8px;height:26px;border-radius:8px;background:rgba(150,150,150,.45);animation:up 2.2s infinite}
+.steam i:nth-child(1){left:30%}.steam i:nth-child(2){left:50%;animation-delay:.6s}.steam i:nth-child(3){left:70%;animation-delay:1.2s}
+@keyframes up{0%{transform:translateY(10px);opacity:0}50%{opacity:1}100%{transform:translateY(-22px);opacity:0}}
+.pava{font-size:56px;display:inline-block;transition:transform .25s;transform:rotate(0)}
+.pava.p{transform:rotate(-38deg) translateX(-8px)}
+.msg{font-size:17px;font-weight:600}
+.pts{color:var(--ok);font-weight:800}
+.err{color:var(--bad);font-weight:600}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+var $=function(s){return document.querySelector(s)};
+var TOTAL=6,FLAV=["Mate amargo de mañana","Mate dulce de siesta","Mate con yuyos","Mate de plaza","Mate en la costanera","Último mate de la tarde"];
+var ws=null,seat=-1,op={m:{},rd:0},oname="",gone=false,code="",connErr="",myName="",my={m:{},rd:0},viewKey="",raf=0;
+
+function show(h){$("#app").innerHTML=h}
+function vib(n){try{navigator.vibrate&&navigator.vibrate(n)}catch(e){}}
+function view(key,html,bind){if(viewKey===key)return;cancelAnimationFrame(raf);viewKey=key;show(html);if(bind)bind()}
+function push(){if(ws&&ws.readyState===1)ws.send(JSON.stringify({t:"st",m:my.m,rd:my.rd}))}
+function cp(c){return Math.round((c[0]+c[1])/2)}
+
+/* ---------- Lobby ---------- */
+function lobby(){
+  viewKey="lobby";
+  show('<h1>🧉 Ronda de Mates</h1><p>Mate online para dos. Uno ceba, el otro toma, y se turnan. ¡Que no se te lave!</p>'+
+  '<div class="card"><input id="nm" placeholder="Tu nombre" maxlength="12"><button id="mk">Crear sala</button></div>'+
+  '<div class="card"><input id="cd" placeholder="Código de sala" maxlength="4" style="text-transform:uppercase"><button class="alt" id="jn">Unirme</button></div>'+
+  (connErr?'<p class="err">'+connErr+'</p>':''));
+  $("#mk").onclick=function(){connect({t:"create"})};
+  $("#jn").onclick=function(){var c=$("#cd").value.trim().toLowerCase();if(c.length<3){connErr="Poné el código que te pasaron.";lobby();return}connect({t:"join",code:c})};
+}
+function connect(first){
+  myName=($("#nm").value||"").trim().slice(0,12)||"Mateador";connErr="";
+  my={m:{},rd:0};seat=-1;op={m:{},rd:0};gone=false;
+  try{ws=new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host)}catch(e){connErr="No pude conectar.";return lobby()}
+  var w=ws;
+  w.onopen=function(){first.name=myName;w.send(JSON.stringify(first))};
+  w.onmessage=function(ev){var m;try{m=JSON.parse(ev.data)}catch(e){return}onMsg(m)};
+  w.onclose=function(){if(ws!==w)return;if(viewKey!=="end"&&viewKey!=="lobby"){connErr="Se cortó la conexión con el servidor.";leave()}};
+  w.onerror=function(){};
+}
+function onMsg(m){
+  if(m.t==="created"){code=m.code;sync()}
+  else if(m.t==="start"){seat=m.seat;oname=String(m.opp||"Rival").slice(0,12);code=m.code||code;sync()}
+  else if(m.t==="opp"){op.m=m.m||{};op.rd=m.rd|0;sync()}
+  else if(m.t==="gone"){gone=true;sync()}
+  else if(m.t==="err"){connErr=m.msg;leave()}
+}
+function leave(){var w=ws;ws=null;try{w&&w.close()}catch(e){}seat=-1;gone=false;my={m:{},rd:0};lobby()}
+
+/* ---------- Sincronización ---------- */
+function sync(){
+  if(!ws)return;
+  if(seat<0)return view("wait0","<h1>Esperando rival…</h1><div class='big'>🧉</div><p>Pasale el link de esta página y este código:</p><div class='code'>"+code.toUpperCase()+"</div><button class='alt' id='b'>Cancelar</button>",function(){$("#b").onclick=leave});
+  var om=op.m,ord=op.rd,names=[];
+  names[seat]=myName;names[1-seat]=oname;
+  var sc=[0,0];
+  for(var i=0;i<TOTAL;i++){var c0=(i%2===seat)?my.m[i]:om[i],t0=(i%2===seat)?om[i]:my.m[i];if(c0&&t0){sc[i%2]+=cp(c0);sc[1-i%2]+=t0[0]}}
+  var head='<div class="score"><span>'+names[0]+': '+sc[0]+'</span><span>'+names[1]+': '+sc[1]+'</span></div>';
+  var r=Math.min(my.rd,ord);
+  if(r>=TOTAL){
+    var w=sc[0]===sc[1]?"Empate: ¡otra ronda de mates!":"🏆 Ganó "+names[sc[0]>sc[1]?0:1];
+    return view("end","<div class='big'>🧉</div><h1>"+w+"</h1>"+head+"<p>Un buen mate se comparte.</p><button id='b'>Salir</button>",function(){$("#b").onclick=leave});
+  }
+  if(gone)return view("gone","<h2>Tu rival se desconectó</h2><p>Se quedó sin yerba. Armá otra sala.</p><button id='b'>Volver</button>",function(){$("#b").onclick=leave});
+  var iCeb=(r%2===seat),cm=iCeb?my.m[r]:om[r],tm=iCeb?om[r]:my.m[r];
+  var title='<p>Ronda '+(r+1)+' de '+TOTAL+' · '+FLAV[r]+'</p>';
+  if(cm&&tm)return result(r,iCeb,cm,tm,head,names,seat);
+  if(iCeb){
+    if(!cm)return view("act"+r,head+title+"<h2>Te toca cebar</h2><p>Preparate…</p>",function(){actTemp(r,head,title)});
+    return view("w"+r+"a",head+title+"<div class='big'>🫖</div><h2>"+names[1-seat]+" está tomando…</h2>");
+  }
+  if(!cm)return view("w"+r+"b",head+title+"<div class='big'>🫖</div><h2>"+names[1-seat]+" está cebando…</h2><p>Esperá tu turno de tomar.</p>");
+  view("sip"+r,head+title+"<h2>Te toca tomar</h2><p>Preparate…</p>",function(){sipStage(r,cm[2],head,title)});
+}
+
+/* ---------- Etapas ---------- */
+function actTemp(r,head,title){
+  var sp=0.0017+r*0.0004,t0=performance.now(),pos=50;
+  show(head+title+"<h2>1. La temperatura</h2><p>Frená la aguja en el verde (70–80 °C). Si hierve, se quema la yerba.</p>"+
+  "<div class='card'><div class='pava'>🫖</div><div class='bar'><div class='zone' style='left:50%;width:17%'></div><div class='mk' id='mk'></div></div></div><button id='tap'>¡Ahora!</button>");
+  function loop(t){pos=50+50*Math.sin((t-t0)*sp);$("#mk").style.left=pos+"%";raf=requestAnimationFrame(loop)}
+  raf=requestAnimationFrame(loop);
+  $("#tap").onclick=function(){cancelAnimationFrame(raf);vib(30);
+    actPour(r,head,title,Math.max(0,Math.round(100-Math.abs(pos-58.5)*3.2)),pos>75?1:0,pos);
+  };
+}
+function actPour(r,head,title,ts,burn,pos){
+  show(head+title+"<h2>2. El agua</h2><p>Mantené apretado y soltá en la línea. Dejá la montañita de yerba seca.</p>"+
+  "<div class='mw'><div class='steam'><i></i><i></i><i></i></div><div class='mate'><div class='water' id='w'></div><div class='yerba'></div><div class='line' style='bottom:78%'></div></div><div class='bomb'></div></div>"+
+  "<div><span class='pava' id='pv'>🫖</span></div><button id='hold'>Mantené para cebar</button>");
+  var b=$("#hold"),pv=$("#pv"),pouring=false,last=0,done=false,lvl=0;
+  function finish(){
+    if(done)return;done=true;pouring=false;cancelAnimationFrame(raf);vib(30);pv.className="pava";
+    var flood=lvl>=100;
+    var ps=flood?0:Math.max(0,Math.round(100-Math.abs(lvl-80)*3));
+    my.m[r]=[ts,ps,burn,flood?1:0,Math.round(pos),Math.round(lvl)];
+    push();sync();
+  }
+  function loop(t){
+    if(pouring){var dt=Math.min(50,t-last);lvl=Math.min(100,lvl+dt*0.045);$("#w").style.height=lvl+"%";if(lvl>=100){finish();return}}
+    last=t;raf=requestAnimationFrame(loop);
+  }
+  b.addEventListener("pointerdown",function(e){e.preventDefault();if(!pouring&&!done){pouring=true;pv.className="pava p";last=performance.now();cancelAnimationFrame(raf);raf=requestAnimationFrame(loop)}});
+  b.addEventListener("pointerup",function(){if(pouring&&lvl>0)finish()});
+  b.addEventListener("pointercancel",function(){if(pouring&&lvl>0)finish()});
+}
+function sipStage(r,burn,head,title){
+  var sp=0.0022+r*0.0004,t0=performance.now(),pos=0;
+  show(head+title+"<h2>Tu sorbo</h2><p>Tocá cuando la marca esté en el centro. "+(burn?"<b>Ojo: el agua venía hirviendo 🔥</b>":"")+"</p>"+
+  "<div class='card'><div class='big'>🧉</div><div class='bar' style='background:var(--bg)'><div class='zone' style='left:40%;width:20%'></div><div class='mk' id='mk'></div></div></div><button id='tap'>¡Sorbo!</button>");
+  function loop(x){var p=((x-t0)*sp)%2;pos=(p<1?p:2-p)*100;$("#mk").style.left=pos+"%";raf=requestAnimationFrame(loop)}
+  raf=requestAnimationFrame(loop);
+  $("#tap").onclick=function(){cancelAnimationFrame(raf);vib(30);
+    var s=Math.max(0,Math.round(100-Math.abs(pos-50)*2.5));if(burn)s=Math.max(0,s-35);
+    my.m[r]=[s];push();sync();
+  };
+}
+function result(r,iCeb,cm,tm,head,names,seat){
+  var ready=my.rd>r,cebN=names[r%2],tomN=names[1-r%2],pos=cm[4],lvl=cm[5],sip=tm[0];
+  var m=[cm[2]?"🔥 Agua hirviendo: se quemó la yerba y se pelaron la lengua.":pos<40?"🧊 Agua fría, mate desabrido.":"🌡️ Temperatura bien de mate.",
+    cm[3]?"💦 ¡Se ahogó la yerba, mate lavado!":lvl<60?"🥤 Poca agua, mate cortito.":cm[1]>75?"✅ Cebado parejito, con espuma y todo.":"🙂 Cebado aceptable.",
+    sip>80?"😌 Sorbo perfecto, ni un gluglú.":sip>45?"🙂 Un sorbo decente.":"😬 Sorbo feo, aire en la bombilla."];
+  view("res"+r+":"+ready,head+"<h2>Ronda "+(r+1)+": resultado</h2><div class='card'>"+m.map(function(x){return "<div class='msg'>"+x+"</div>"}).join("")+
+  "<div><b>"+cebN+"</b> <span class='pts'>+"+cp(cm)+"</span> · <b>"+tomN+"</b> <span class='pts'>+"+sip+"</span></div></div>"+
+  (ready?"<p>Esperando a que tu rival esté listo…</p>":"<button id='go'>"+(r+1>=TOTAL?"Ver ganador":"Siguiente ronda")+"</button>"),
+  function(){var g=$("#go");if(g)g.onclick=function(){my.rd=r+1;push();sync()}});
+}
+
+/* ---------- Arranque ---------- */
+lobby();
+</script>
+</body>
+</html>
