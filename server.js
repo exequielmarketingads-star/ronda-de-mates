@@ -4,7 +4,15 @@ const path = require("path");
 const { WebSocketServer } = require("ws");
 
 const PORT = process.env.PORT || 3000;
-const html = fs.readFileSync(path.join(__dirname, "public", "index.html"));
+const candidates = [
+  path.join(__dirname, "public", "index.html"),
+  path.join(__dirname, "index.html"),
+];
+const found = candidates.find((p) => fs.existsSync(p));
+if (!found) console.error("No encontré index.html. Buscado en:", candidates.join(" | "));
+const html = found
+  ? fs.readFileSync(found)
+  : Buffer.from("<h1>Falta index.html</h1><p>Subí la carpeta public/ con index.html al repositorio.</p>");
 const rooms = new Map();
 const ALPHA = "abcdefghjkmnpqrstuvwxyz23456789";
 
